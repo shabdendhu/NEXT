@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from 'react';
-import { HomeOutlined, DollarOutlined, MenuUnfoldOutlined, MenuFoldOutlined } from '@ant-design/icons';
+import { HomeOutlined, DollarOutlined, MenuUnfoldOutlined, MenuFoldOutlined , ApartmentOutlined, FileProtectOutlined} from '@ant-design/icons';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/assets/logo';
@@ -25,7 +25,7 @@ const NavLink: React.FC<NavLinkProps> = ({ href, icon, text, collapsed, isActive
     }`}
   >
     {icon}
-    {!collapsed && <span className='text-[14px]'>{text}</span>}
+    {!collapsed && <span className='text-[12px] font-bold'>{text}</span>}
   </Link>
 );
 
@@ -55,7 +55,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Navigation */}
-      <div className="flex flex-col gap-5 flex-grow mt-10">
+      <div className="flex flex-col gap-5 flex-grow mt-10 ">
         <NavLink 
           href="/credit-manager" 
           icon={<HomeOutlined />} 
@@ -69,6 +69,20 @@ const Sidebar: React.FC = () => {
           text="Credit Transaction"
           collapsed={collapsed}
           isActive={activePath === '/credit-transaction'}
+        />
+        <NavLink 
+          href="/taskManagement" 
+          icon={<FileProtectOutlined />} 
+          text="Task Management"
+          collapsed={collapsed}
+          isActive={activePath === '/taskManagement'}
+        />
+        <NavLink 
+          href="/portal" 
+          icon={<ApartmentOutlined />} 
+          text="Portal"
+          collapsed={collapsed}
+          isActive={activePath === '/portal'}
         />
       </div>
 
