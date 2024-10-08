@@ -4,5 +4,5 @@ interface MainContentProps {
 }
 
 export default function MainContent({ children }: MainContentProps) {
-  return <div className="flex-1 overflow-auto p-8">{children}</div>;
+  return <div className="flex-1 overflow-auto">{children}</div>;
 }
