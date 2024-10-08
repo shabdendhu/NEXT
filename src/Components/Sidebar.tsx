@@ -51,7 +51,7 @@ const Sidebar: React.FC = () => {
       {/* Header */}
       <div className="flex items-center ml-1">
         <Logo className={`transition-all duration-300 ${collapsed ? 'w-8' : 'w-12'}`} />
-        {!collapsed && <h1 className="text-[18px] font-bold">LPG GURU Admin</h1>}
+        {!collapsed && <h1 className="text-[20px] font-bold ml-2">Admin</h1>}
       </div>
 
       {/* Navigation */}
@@ -83,6 +83,13 @@ const Sidebar: React.FC = () => {
           text="Portal"
           collapsed={collapsed}
           isActive={activePath === '/portal'}
+        />
+        <NavLink 
+          href="/report" 
+          icon={<ApartmentOutlined />} 
+          text="Report"
+          collapsed={collapsed}
+          isActive={activePath === '/report'}
         />
       </div>
 

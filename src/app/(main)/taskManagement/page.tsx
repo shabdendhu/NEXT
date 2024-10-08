@@ -7,11 +7,9 @@ import {
   Input,
   Table,
   Form,
-  Collapse,
-  Space,
   Divider,
+  Radio,
 } from "antd";
-import axios from "axios";
 import { createTask, getTask, updateTask } from "@/api";
 
 // Define TypeScript interfaces
@@ -56,8 +54,9 @@ export default function TasksPage() {
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [form] = Form.useForm();
+  const [inputType, setInputType] = useState<'form' | 'json'>('form');
+  const [jsonInput, setJsonInput] = useState<string>('');
 
-  // Local state for pages, steps, and variables
   const [pages, setPages] = useState<Page[]>([]);
   const [variables, setVariables] = useState<Variable[]>([]);
 
@@ -80,42 +79,58 @@ export default function TasksPage() {
     form.resetFields();
     setPages([]);
     setVariables([]);
+    setInputType('form');
+    setJsonInput('');
   };
-
   const handleEditTask = (task: Task) => {
     setEditingTask(task);
-    const updatedPages =
-      task.taskJson?.pages.map((page) => ({
-        ...page,
-        steps: page.steps.map((step) => ({
-          action: step.action,
-          location: step.location,
-          variable: step.variable,
-          keyValuePairs: step.variable
-            ? [{ key: step.variable, value: step.variable }]
-            : [],
-        })),
-      })) || [];
-    setPages(updatedPages);
-    setVariables(
-      Object.entries(task.variables || {}).map(([key, value]) => ({
-        key,
-        value,
-      }))
-    );
-    form.setFieldsValue(task);
+    if (inputType === 'form') {
+      const updatedPages =
+        task.taskJson?.pages.map((page) => ({
+          ...page,
+          steps: page.steps.map((step) => ({
+            action: step.action,
+            location: step.location,
+            variable: step.variable,
+            keyValuePairs: step.variable
+              ? [{ key: step.variable, value: step.variable }]
+              : [],
+          })),
+        })) || [];
+      setPages(updatedPages);
+      setVariables(
+        Object.entries(task.variables || {}).map(([key, value]) => ({
+          key,
+          value,
+        }))
+      );
+      form.setFieldsValue(task);
+    } else {
+      setJsonInput(JSON.stringify(task, null, 2));
+    }
     setIsModalVisible(true);
   };
 
   const handleSaveTask = async (values: any) => {
-    const payload = {
-      ...values,
-      taskJson: { pages },
-      variables: variables.reduce(
-        (acc, { key, value }) => ({ ...acc, [key]: value }),
-        {}
-      ),
-    };
+    let payload;
+    if (inputType === 'form') {
+      payload = {
+        ...values,
+        taskJson: { pages },
+        variables: variables.reduce(
+          (acc, { key, value }) => ({ ...acc, [key]: value }),
+          {}
+        ),
+      };
+    } else {
+      try {
+        payload = JSON.parse(jsonInput);
+      } catch (error) {
+        console.error("Invalid JSON input:", error);
+        return;
+      }
+    }
+    
     try {
       if (editingTask) {
         await updateTask(editingTask.id, payload);
@@ -127,6 +142,7 @@ export default function TasksPage() {
       form.resetFields();
       setPages([]);
       setVariables([]);
+      setJsonInput('');
     } catch (error) {
       console.error("Error saving task:", error);
     }
@@ -262,6 +278,19 @@ export default function TasksPage() {
           >
             <Input />
           </Form.Item>
+
+          <Form.Item >
+            <Radio.Group
+              value={inputType}
+              onChange={(e) => setInputType(e.target.value)}
+            >
+              <Radio value="form">Form</Radio>
+              <Radio value="json">JSON</Radio>
+            </Radio.Group>
+          </Form.Item>
+
+          {inputType === 'form' ? (
+            <>
 
           {/* Pages Section */}
           <Divider style={{ borderColor: "#333333" }}>Pages</Divider>
@@ -535,8 +564,19 @@ export default function TasksPage() {
               </Button>
             </div>
           ))}
+           </>
+          ) : (
+            <Form.Item label="JSON Input">
+              <Input.TextArea
+                rows={10}
+                value={jsonInput}
+                onChange={(e) => setJsonInput(e.target.value)}
+              />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
     </div>
   );
+       
 }

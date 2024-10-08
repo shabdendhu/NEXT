@@ -374,3 +374,45 @@ export const deletePortal = async (id: number) => {
     throw error;
   }
 };
+
+
+export const createReport = async (reportDetails: any) => {
+  try {
+    const response = await axiosInstance.post('/report/create', reportDetails);
+    return response.data;
+  } catch (error) {
+    console.error("Error creating report:", error);
+    throw error;
+  }
+};
+
+export const getReports = async () => {
+  try {
+    const response = await axiosInstance.get('/report');
+    return response.data;    
+  }
+   catch (error) {
+    console.error("Error fetching reports:", error);
+    throw error;
+  }
+};
+
+export const updateReport = async (id: number, reportDetails: any) => {
+  try {
+    const response = await axiosInstance.put(`/report/${id}/manual-sync`, reportDetails);
+    return response.data;
+  } catch (error) {
+    console.error("Error updating report:", error);
+    throw error;
+  }
+};
+
+export const deleteReport = async (id: number) => {
+  try {
+    const response = await axiosInstance.delete(`/report/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error deleting report:", error);
+    throw error;
+  }
+};
