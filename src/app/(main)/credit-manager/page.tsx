@@ -7,6 +7,7 @@ import {
   DollarOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
+import { Switch } from "antd"; // Import Switch
 
 interface Credit {
   totalAvailable: number;
@@ -35,14 +36,17 @@ const { Option } = Select;
 export default function ManageCreditAndPackages() {
   const [credit, setCredit] = useState<Credit | null>(null);
   const [creditPackages, setCreditPackages] = useState<CreditPackage[]>([]);
-  const [modalVisible, setModalVisible] = useState<string | null>(null); // To handle modal visibility
+  const [modalVisible, setModalVisible] = useState<boolean>(false); // Single modal for packages
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(
     null
-  ); // For editing
+  ); // For editing or creating packages
   const [discountType, setDiscountType] = useState<string | undefined>(); // Track discount type
   const [form] = Form.useForm();
+  const [creditsModalVisible, setCreditsModalVisible] =
+    useState<boolean>(false); // Modal for updating credits
+  const [resaleModalVisible, setResaleModalVisible] = useState<boolean>(false); // Modal for updating resale pricing
 
-  const API_BASE_URL = "http://localhost:3000/api/credits"; // Replace with your actual API base URL
+  const API_BASE_URL = "http://192.168.31.88:3000/api/credits"; // Replace with your actual API base URL
 
   useEffect(() => {
     // Fetching initial credit and package data
@@ -72,10 +76,8 @@ export default function ManageCreditAndPackages() {
     fetchPackages();
   }, []);
 
-  // Modal Handlers
-  const openModal = (modalType: string, pkg?: CreditPackage) => {
-    form.resetFields(); // Ensure form fields are reset on modal open
-
+  // Modal Handlers for Credits and Resale Pricing
+  const openModal = (pkg?: CreditPackage) => {
     if (pkg) {
       setSelectedPackage(pkg);
       form.setFieldsValue(pkg); // Prepopulate form if package is selected
@@ -85,14 +87,58 @@ export default function ManageCreditAndPackages() {
       setSelectedPackage(null);
       setDiscountType(undefined); // Reset discount type when creating a new package
     }
-    setModalVisible(modalType);
+    setModalVisible(true);
   };
 
   const closeModal = () => {
-    setModalVisible(null);
-    setSelectedPackage(null);
     form.resetFields();
+    setModalVisible(false);
+    setSelectedPackage(null);
     setDiscountType(undefined); // Reset discount type when closing modal
+  };
+
+  const openCreditsModal = () => setCreditsModalVisible(true);
+  const closeCreditsModal = () => setCreditsModalVisible(false);
+
+  const openResaleModal = () => setResaleModalVisible(true);
+  const closeResaleModal = () => setResaleModalVisible(false);
+
+  const handleSavePackage = async (values: any) => {
+    try {
+      const url = selectedPackage
+        ? `${API_BASE_URL}/packages/${selectedPackage.id}/update`
+        : `${API_BASE_URL}/packages/create`;
+      const method = selectedPackage ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        message.success(
+          selectedPackage
+            ? "Package updated successfully."
+            : "Package created successfully."
+        );
+        setCreditPackages((prev) =>
+          selectedPackage
+            ? prev.map((pkg) =>
+                pkg.id === selectedPackage.id ? data.data : pkg
+              )
+            : [...prev, data.data]
+        );
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      console.error("Error saving package:", error);
+      message.error("Failed to save package.");
+    } finally {
+      closeModal();
+    }
   };
 
   const handleUpdateCredits = async (values: any) => {
@@ -114,7 +160,7 @@ export default function ManageCreditAndPackages() {
       console.error("Error updating credits:", error);
       message.error("Failed to update credits.");
     } finally {
-      closeModal();
+      closeCreditsModal();
     }
   };
 
@@ -137,60 +183,34 @@ export default function ManageCreditAndPackages() {
       console.error("Error updating resale pricing:", error);
       message.error("Failed to update resale pricing.");
     } finally {
-      closeModal();
+      closeResaleModal();
     }
   };
-
-  const handleCreatePackage = async (values: any) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/packages/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        message.success("Package created successfully.");
-        setCreditPackages((prev) => [...prev, data.data]); // Add new package to list
-      } else {
-        throw new Error(data.message);
-      }
-    } catch (error) {
-      console.error("Error creating package:", error);
-      message.error("Failed to create package.");
-    } finally {
-      closeModal();
-    }
-  };
-
-  const handleEditPackage = async (values: any) => {
-    if (!selectedPackage) return;
-
+  const handleToggleStatus = async (pkg: CreditPackage) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/packages/${selectedPackage.id}/update`,
+        `${API_BASE_URL}/packages/${pkg.id}/status`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify({ isActive: !pkg.isActive }), // Toggle the current status
         }
       );
 
       const data = await response.json();
       if (response.ok) {
-        message.success("Package updated successfully.");
+        message.success("Package status updated successfully.");
         setCreditPackages((prev) =>
-          prev.map((pkg) => (pkg.id === selectedPackage.id ? data.data : pkg))
-        ); // Update the package in the list
+          prev.map((p) =>
+            p.id === pkg.id ? { ...p, isActive: !pkg.isActive } : p
+          )
+        );
       } else {
         throw new Error(data.message);
       }
     } catch (error) {
-      console.error("Error updating package:", error);
-      message.error("Failed to update package.");
-    } finally {
-      closeModal();
+      console.error("Error toggling package status:", error);
+      message.error("Failed to update package status.");
     }
   };
 
@@ -200,21 +220,21 @@ export default function ManageCreditAndPackages() {
       <div className="flex justify-end gap-4 mb-4">
         <Button
           icon={<SyncOutlined />}
-          onClick={() => openModal("updateCredits")}
+          onClick={openCreditsModal}
           type="primary"
         >
           Update Credits
         </Button>
         <Button
           icon={<DollarOutlined />}
-          onClick={() => openModal("updateResale")}
+          onClick={openResaleModal}
           type="primary"
         >
           Update Resale Pricing
         </Button>
         <Button
           icon={<PlusOutlined />}
-          onClick={() => openModal("createPackage")}
+          onClick={() => openModal()}
           type="primary"
         >
           Create Package
@@ -233,7 +253,14 @@ export default function ManageCreditAndPackages() {
                 key={pkg.id}
                 title={pkg.name}
                 extra={
-                  <EditOutlined onClick={() => openModal("editPackage", pkg)} />
+                  <>
+                    <Switch
+                      checked={pkg.isActive}
+                      onChange={() => handleToggleStatus(pkg)}
+                      style={{ marginRight: 8 }} // Add some margin for spacing
+                    />
+                    <EditOutlined onClick={() => openModal(pkg)} />
+                  </>
                 }
                 className="w-full"
               >
@@ -251,11 +278,124 @@ export default function ManageCreditAndPackages() {
         )}
       </div>
 
-      {/* Modals */}
+      {/* Modal for Adding/Editing Package */}
       <Modal
-        open={modalVisible === "updateCredits"}
-        title="Update Available Credits & Purchase Rate"
+        open={modalVisible}
+        title={
+          selectedPackage ? "Edit Credit Package" : "Create New Credit Package"
+        }
         onCancel={closeModal}
+        onOk={form.submit}
+        okText={selectedPackage ? "Update" : "Create"}
+      >
+        <Form
+          layout="vertical"
+          form={form}
+          onFinish={handleSavePackage}
+          // initialValues={selectedPackage || {}}
+        >
+          <Form.Item
+            label="Package Name"
+            name="name"
+            rules={[{ required: true, message: "Package name is required" }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label="SMS Quantity"
+            name="smsQuantity"
+            rules={[{ required: true, message: "SMS Quantity is required" }]}
+          >
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item
+            label="WhatsApp Quantity"
+            name="whatsappQuantity"
+            rules={[
+              { required: true, message: "WhatsApp Quantity is required" },
+            ]}
+          >
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item
+            label="Voice Quantity"
+            name="voiceQuantity"
+            rules={[{ required: true, message: "Voice Quantity is required" }]}
+          >
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item
+            label="Discount Type"
+            name="discountType"
+            rules={[{ required: true, message: "Discount Type is required" }]}
+          >
+            <Select
+              onChange={(value) => {
+                setDiscountType(value);
+              }}
+            >
+              <Option value="DIRECT">Direct Discount</Option>
+              <Option value="PERCENTAGE">Percentage Discount</Option>
+              <Option value="EXTRA_CREDITS">Extra Credits</Option>
+            </Select>
+          </Form.Item>
+
+          {discountType === "DIRECT" && (
+            <Form.Item
+              label="Direct Discount Amount"
+              name="discountValue"
+              rules={[
+                { required: true, message: "Direct Discount is required" },
+              ]}
+            >
+              <Input type="number" />
+            </Form.Item>
+          )}
+
+          {discountType === "PERCENTAGE" && (
+            <Form.Item
+              label="Percentage Discount (%)"
+              name="discountValue"
+              rules={[
+                { required: true, message: "Percentage Discount is required" },
+              ]}
+            >
+              <Input type="number" />
+            </Form.Item>
+          )}
+
+          {discountType === "EXTRA_CREDITS" && (
+            <>
+              <Form.Item label="Extra SMS Credits" name="extraCreditsSms">
+                <Input type="number" />
+              </Form.Item>
+              <Form.Item
+                label="Extra WhatsApp Credits"
+                name="extraCreditsWhatsapp"
+              >
+                <Input type="number" />
+              </Form.Item>
+              <Form.Item label="Extra Voice Credits" name="extraCreditsVoice">
+                <Input type="number" />
+              </Form.Item>
+            </>
+          )}
+
+          <Form.Item
+            label="Validity Period (Days)"
+            name="validityPeriodDays"
+            rules={[{ required: true, message: "Validity period is required" }]}
+          >
+            <Input type="number" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Modal for Updating Credits */}
+      <Modal
+        open={creditsModalVisible}
+        title="Update Available Credits & Purchase Rate"
+        onCancel={closeCreditsModal}
         onOk={form.submit}
         okText="Update"
       >
@@ -274,10 +414,11 @@ export default function ManageCreditAndPackages() {
         </Form>
       </Modal>
 
+      {/* Modal for Updating Resale Pricing */}
       <Modal
-        open={modalVisible === "updateResale"}
+        open={resaleModalVisible}
         title="Update Resale Pricing"
-        onCancel={closeModal}
+        onCancel={closeResaleModal}
         onOk={form.submit}
         okText="Update"
       >
@@ -288,116 +429,6 @@ export default function ManageCreditAndPackages() {
           initialValues={credit || {}}
         >
           <Form.Item label="Resale Rate" name="resaleRate">
-            <Input type="number" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        open={modalVisible === "createPackage"}
-        title="Create New Credit Package"
-        onCancel={closeModal}
-        onOk={form.submit}
-        okText="Create"
-      >
-        <Form layout="vertical" form={form} onFinish={handleCreatePackage}>
-          <Form.Item label="Package Name" name="name">
-            <Input />
-          </Form.Item>
-          <Form.Item label="SMS Quantity" name="smsQuantity">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item label="WhatsApp Quantity" name="whatsappQuantity">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item label="Voice Quantity" name="voiceQuantity">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item label="Discount Type" name="discountType">
-            <Select onChange={(value) => setDiscountType(value)}>
-              <Option value="DIRECT">Direct Discount</Option>
-              <Option value="PERCENTAGE">Percentage Discount</Option>
-              <Option value="EXTRA_CREDITS">Extra Credits</Option>
-            </Select>
-          </Form.Item>
-
-          {discountType === "EXTRA_CREDITS" && (
-            <>
-              <Form.Item label="Extra SMS Credits" name="extraCreditsSms">
-                <Input type="number" />
-              </Form.Item>
-              <Form.Item
-                label="Extra WhatsApp Credits"
-                name="extraCreditsWhatsapp"
-              >
-                <Input type="number" />
-              </Form.Item>
-              <Form.Item label="Extra Voice Credits" name="extraCreditsVoice">
-                <Input type="number" />
-              </Form.Item>
-            </>
-          )}
-
-          <Form.Item label="Validity Period (Days)" name="validityPeriodDays">
-            <Input type="number" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        open={modalVisible === "editPackage"}
-        title="Edit Credit Package"
-        onCancel={closeModal}
-        onOk={form.submit}
-        okText="Update"
-      >
-        <Form
-          form={form}
-          onFinish={handleEditPackage}
-          initialValues={selectedPackage || {}}
-          layout="vertical"
-        >
-          <Form.Item label="Package Name" name="name">
-            <Input />
-          </Form.Item>
-          <Form.Item label="SMS Quantity" name="smsQuantity">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item label="WhatsApp Quantity" name="whatsappQuantity">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item label="Voice Quantity" name="voiceQuantity">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item label="Discount Type" name="discountType">
-            <Select onChange={(value) => setDiscountType(value)}>
-              <Option value="DIRECT">Direct Discount</Option>
-              <Option value="PERCENTAGE">Percentage Discount</Option>
-              <Option value="EXTRA_CREDITS">Extra Credits</Option>
-            </Select>
-          </Form.Item>
-
-          {discountType === "EXTRA_CREDITS" && (
-            <>
-              <Form.Item label="Extra SMS Credits" name="extraCreditsSms">
-                <Input type="number" />
-              </Form.Item>
-              <Form.Item
-                label="Extra WhatsApp Credits"
-                name="extraCreditsWhatsapp"
-              >
-                <Input type="number" />
-              </Form.Item>
-              <Form.Item label="Extra Voice Credits" name="extraCreditsVoice">
-                <Input type="number" />
-              </Form.Item>
-            </>
-          )}
-
-          <Form.Item label="Discount Value" name="discountValue">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item label="Validity Period (Days)" name="validityPeriodDays">
             <Input type="number" />
           </Form.Item>
         </Form>
