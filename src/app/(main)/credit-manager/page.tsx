@@ -1,8 +1,15 @@
 "use client";
 import { useState, useEffect } from "react";
+import { Modal, Button, Card, Input, Form, Select, message } from "antd";
+import {
+  EditOutlined,
+  PlusOutlined,
+  DollarOutlined,
+  SyncOutlined,
+} from "@ant-design/icons";
+import { Switch } from "antd"; // Import Switch
 
 interface Credit {
-  id?: number;
   totalAvailable: number;
   purchaseRate: number;
   resaleRate: number;
@@ -17,418 +24,415 @@ interface CreditPackage {
   voiceQuantity: number;
   discountType: "DIRECT" | "PERCENTAGE" | "EXTRA_CREDITS";
   discountValue?: number;
+  extraCreditsSms?: number;
+  extraCreditsWhatsapp?: number;
+  extraCreditsVoice?: number;
   validityPeriodDays: number;
   isActive: boolean;
 }
 
+const { Option } = Select;
+
 export default function ManageCreditAndPackages() {
   const [credit, setCredit] = useState<Credit | null>(null);
-  const [creditPackages, setCreditPackages] = useState<CreditPackage>({
-    name: "",
-    description: "",
-    smsQuantity: 0,
-    whatsappQuantity: 0,
-    voiceQuantity: 0,
-    discountType: "DIRECT",
-    discountValue: 0,
-    validityPeriodDays: 0,
-    isActive: true,
-  });
-  const [packageList, setPackageList] = useState<CreditPackage[]>([]);
+  const [creditPackages, setCreditPackages] = useState<CreditPackage[]>([]);
+  const [modalVisible, setModalVisible] = useState<boolean>(false); // Single modal for packages
+  const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(
+    null
+  ); // For editing or creating packages
+  const [discountType, setDiscountType] = useState<string | undefined>(); // Track discount type
+  const [form] = Form.useForm();
+  const [creditsModalVisible, setCreditsModalVisible] =
+    useState<boolean>(false); // Modal for updating credits
+  const [resaleModalVisible, setResaleModalVisible] = useState<boolean>(false); // Modal for updating resale pricing
 
-  const [loadingCredit, setLoadingCredit] = useState<boolean>(false);
-  const [loadingPackages, setLoadingPackages] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const API_BASE_URL = "http://192.168.31.88:3000/api/credits"; // Replace with your actual API base URL
 
-  const API_BASE_URL = "http://localhost:3000/api/credits"; // Replace with your actual API base URL
-
-  // Fetch credit data
   useEffect(() => {
+    // Fetching initial credit and package data
     const fetchCreditData = async () => {
-      setLoadingCredit(true);
       try {
         const response = await fetch(`${API_BASE_URL}/available`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch credit data");
-        }
         const data = await response.json();
-        if (data.data) {
-          setCredit(data.data);
-        } else {
-          setCredit(null);
-        }
+        setCredit(data.data);
       } catch (error) {
         console.error("Error fetching credit data:", error);
-        setError("Error fetching credit data");
-      } finally {
-        setLoadingCredit(false);
+        message.error("Error fetching credit data.");
+      }
+    };
+
+    const fetchPackages = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/packages`);
+        const data = await response.json();
+        setCreditPackages(data.data);
+      } catch (error) {
+        console.error("Error fetching packages:", error);
+        message.error("Error fetching credit packages.");
       }
     };
 
     fetchCreditData();
-  }, []);
-
-  // Fetch package list
-  useEffect(() => {
-    const fetchPackages = async () => {
-      setLoadingPackages(true);
-      try {
-        const response = await fetch(`${API_BASE_URL}/packages`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch packages");
-        }
-        const data = await response.json();
-        if (data.data) {
-          setPackageList(data.data);
-        } else {
-          setPackageList([]);
-        }
-      } catch (error) {
-        console.error("Error fetching packages:", error);
-        setError("Error fetching packages");
-      } finally {
-        setLoadingPackages(false);
-      }
-    };
-
     fetchPackages();
   }, []);
 
-  const handleCreditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (credit) {
-      setCredit((prev) => ({ ...prev!, [name]: Number(value) }));
+  // Modal Handlers for Credits and Resale Pricing
+  const openModal = (pkg?: CreditPackage) => {
+    if (pkg) {
+      setSelectedPackage(pkg);
+      form.setFieldsValue(pkg); // Prepopulate form if package is selected
+      setDiscountType(pkg.discountType); // Set discountType to properly render discount fields
     } else {
-      setCredit(
-        (prev) =>
-          ({
-            ...prev,
-            [name]: Number(value),
-          } as Credit)
-      );
+      form.resetFields();
+      setSelectedPackage(null);
+      setDiscountType(undefined); // Reset discount type when creating a new package
     }
-  };
-  const handleCreditPackageChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
-  ) => {
-    const { name, value } = e.target;
-    setCreditPackages((prev) => ({
-      ...prev,
-      [name]: [
-        "smsQuantity",
-        "whatsappQuantity",
-        "voiceQuantity",
-        "validityPeriodDays",
-        "discountValue",
-      ].includes(name)
-        ? Number(value)
-        : value,
-    }));
+    setModalVisible(true);
   };
 
-  const saveCredit = async () => {
-    if (!credit) {
-      console.log("No credit data to save");
-      return;
-    }
+  const closeModal = () => {
+    form.resetFields();
+    setModalVisible(false);
+    setSelectedPackage(null);
+    setDiscountType(undefined); // Reset discount type when closing modal
+  };
 
+  const openCreditsModal = () => setCreditsModalVisible(true);
+  const closeCreditsModal = () => setCreditsModalVisible(false);
+
+  const openResaleModal = () => setResaleModalVisible(true);
+  const closeResaleModal = () => setResaleModalVisible(false);
+
+  const handleSavePackage = async (values: any) => {
+    try {
+      const url = selectedPackage
+        ? `${API_BASE_URL}/packages/${selectedPackage.id}/update`
+        : `${API_BASE_URL}/packages/create`;
+      const method = selectedPackage ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        message.success(
+          selectedPackage
+            ? "Package updated successfully."
+            : "Package created successfully."
+        );
+        setCreditPackages((prev) =>
+          selectedPackage
+            ? prev.map((pkg) =>
+                pkg.id === selectedPackage.id ? data.data : pkg
+              )
+            : [...prev, data.data]
+        );
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error) {
+      console.error("Error saving package:", error);
+      message.error("Failed to save package.");
+    } finally {
+      closeModal();
+    }
+  };
+
+  const handleUpdateCredits = async (values: any) => {
     try {
       const response = await fetch(`${API_BASE_URL}/update`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(credit),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
       });
-      if (!response.ok) {
-        throw new Error("Failed to save credit data");
-      }
+
       const data = await response.json();
-      alert(data.message || "Credit saved successfully");
+      if (response.ok) {
+        message.success(data.message || "Credits updated successfully.");
+        setCredit(data.data); // Update the credit in state
+      } else {
+        throw new Error(data.message);
+      }
     } catch (error) {
-      console.error("Error saving credit data:", error);
-      alert("Error saving credit data");
+      console.error("Error updating credits:", error);
+      message.error("Failed to update credits.");
+    } finally {
+      closeCreditsModal();
     }
   };
 
-  const saveCreditPackage = async () => {
+  const handleUpdateResale = async (values: any) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/packages/create`, {
+      const response = await fetch(`${API_BASE_URL}/update`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(creditPackages),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
       });
-      if (!response.ok) {
-        throw new Error("Failed to save credit package");
-      }
+
       const data = await response.json();
-      alert(data.message || "Credit Package saved successfully");
-      // Update the package list
-      setPackageList((prev) => [...prev, data.data]);
-      // Reset the form
-      setCreditPackages({
-        name: "",
-        description: "",
-        smsQuantity: 0,
-        whatsappQuantity: 0,
-        voiceQuantity: 0,
-        discountType: "DIRECT",
-        discountValue: 0,
-        validityPeriodDays: 0,
-        isActive: true,
-      });
+      if (response.ok) {
+        message.success(data.message || "Resale pricing updated successfully.");
+        setCredit(data.data); // Update the credit in state
+      } else {
+        throw new Error(data.message);
+      }
     } catch (error) {
-      console.error("Error saving credit package:", error);
-      alert("Error saving credit package");
+      console.error("Error updating resale pricing:", error);
+      message.error("Failed to update resale pricing.");
+    } finally {
+      closeResaleModal();
     }
   };
-
-  // Handle delete package
-  const deletePackage = async (id: number) => {
+  const handleToggleStatus = async (pkg: CreditPackage) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/packages/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        throw new Error("Failed to delete package");
-      }
+      const response = await fetch(
+        `${API_BASE_URL}/packages/${pkg.id}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: !pkg.isActive }), // Toggle the current status
+        }
+      );
+
       const data = await response.json();
-      alert(data.message || "Package deleted successfully");
-      // Update the package list
-      setPackageList((prev) => prev.filter((pkg) => pkg.id !== id));
+      if (response.ok) {
+        message.success("Package status updated successfully.");
+        setCreditPackages((prev) =>
+          prev.map((p) =>
+            p.id === pkg.id ? { ...p, isActive: !pkg.isActive } : p
+          )
+        );
+      } else {
+        throw new Error(data.message);
+      }
     } catch (error) {
-      console.error("Error deleting package:", error);
-      alert("Error deleting package");
+      console.error("Error toggling package status:", error);
+      message.error("Failed to update package status.");
     }
   };
 
   return (
-    <div className="space-y-8 p-8 bg-gray-100 min-h-screen">
-      {error && <p className="text-red-500">{error}</p>}
-
-      {/* Loading indicators */}
-      {loadingCredit && <p>Loading credit data...</p>}
-      {loadingPackages && <p>Loading packages...</p>}
-
-      <div className="flex flex-col lg:flex-row justify-evenly gap-5">
-        {/* Manage Credits Section */}
-        {credit && (
-          <div className="bg-white p-6 rounded-lg shadow-md flex-1">
-            <h2 className="text-2xl font-bold mb-4">Manage Credits</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium">
-                  Total Available Credits
-                </label>
-                <input
-                  type="number"
-                  name="totalAvailable"
-                  value={credit.totalAvailable}
-                  onChange={handleCreditChange}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">
-                  Purchase Rate
-                </label>
-                <input
-                  type="number"
-                  name="purchaseRate"
-                  value={credit.purchaseRate}
-                  onChange={handleCreditChange}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Resale Rate</label>
-                <input
-                  type="number"
-                  name="resaleRate"
-                  value={credit.resaleRate}
-                  onChange={handleCreditChange}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              <button
-                onClick={saveCredit}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Save Credit
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Manage Credit Packages Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md flex-1">
-          <h2 className="text-2xl font-bold mb-4">Create New Credit Package</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium">Package Name</label>
-              <input
-                type="text"
-                name="name"
-                value={creditPackages.name}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            {/* Description Field */}
-            <div>
-              <label className="block text-sm font-medium">Description</label>
-              <textarea
-                name="description"
-                value={creditPackages.description}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            {/* Quantities */}
-            <div>
-              <label className="block text-sm font-medium">SMS Quantity</label>
-              <input
-                type="number"
-                name="smsQuantity"
-                value={creditPackages.smsQuantity}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">
-                WhatsApp Quantity
-              </label>
-              <input
-                type="number"
-                name="whatsappQuantity"
-                value={creditPackages.whatsappQuantity}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">
-                Voice Quantity
-              </label>
-              <input
-                type="number"
-                name="voiceQuantity"
-                value={creditPackages.voiceQuantity}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            {/* Discount */}
-            <div>
-              <label className="block text-sm font-medium">Discount Type</label>
-              <select
-                name="discountType"
-                value={creditPackages.discountType}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              >
-                <option value="DIRECT">Direct Discount</option>
-                <option value="PERCENTAGE">Percentage Discount</option>
-                <option value="EXTRA_CREDITS">Extra Credits</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium">
-                Discount Value
-              </label>
-              <input
-                type="number"
-                name="discountValue"
-                value={creditPackages.discountValue || 0}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            {/* Validity */}
-            <div>
-              <label className="block text-sm font-medium">
-                Validity Period (Days)
-              </label>
-              <input
-                type="number"
-                name="validityPeriodDays"
-                value={creditPackages.validityPeriodDays}
-                onChange={handleCreditPackageChange}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            {/* Is Active */}
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="isActive"
-                checked={creditPackages.isActive}
-                onChange={() =>
-                  setCreditPackages((prev) => ({
-                    ...prev,
-                    isActive: !prev.isActive,
-                  }))
-                }
-                className="mr-2"
-              />
-              <label className="text-sm font-medium">Is Active</label>
-            </div>
-            <button
-              onClick={saveCreditPackage}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Save Credit Package
-            </button>
-          </div>
-        </div>
+    <div className="p-8 bg-gray-100 min-h-screen space-y-8">
+      {/* Action Buttons */}
+      <div className="flex justify-end gap-4 mb-4">
+        <Button
+          icon={<SyncOutlined />}
+          onClick={openCreditsModal}
+          type="primary"
+        >
+          Update Credits
+        </Button>
+        <Button
+          icon={<DollarOutlined />}
+          onClick={openResaleModal}
+          type="primary"
+        >
+          Update Resale Pricing
+        </Button>
+        <Button
+          icon={<PlusOutlined />}
+          onClick={() => openModal()}
+          type="primary"
+        >
+          Create Package
+        </Button>
       </div>
 
       {/* Display Package List in Card View */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h2 className="text-2xl font-bold mb-4">Credit Packages</h2>
-        {packageList.length === 0 ? (
+        {creditPackages.length === 0 ? (
           <p>No packages available.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {packageList.map((pkg) => (
-              <div
+            {creditPackages.map((pkg) => (
+              <Card
                 key={pkg.id}
-                className="bg-blue-100 p-4 rounded-lg shadow-md flex flex-col justify-between"
-                style={{ minHeight: "200px" }}
+                title={pkg.name}
+                extra={
+                  <>
+                    <Switch
+                      checked={pkg.isActive}
+                      onChange={() => handleToggleStatus(pkg)}
+                      style={{ marginRight: 8 }} // Add some margin for spacing
+                    />
+                    <EditOutlined onClick={() => openModal(pkg)} />
+                  </>
+                }
+                className="w-full"
               >
-                <div>
-                  <h3 className="text-lg font-bold mb-2">{pkg.name}</h3>
-                  <p className="text-sm">SMS Quantity: {pkg.smsQuantity}</p>
-                  <p className="text-sm">
-                    WhatsApp Quantity: {pkg.whatsappQuantity}
-                  </p>
-                  <p className="text-sm">Voice Quantity: {pkg.voiceQuantity}</p>
-                  <p className="text-sm">
-                    Discount: {pkg.discountValue} ({pkg.discountType})
-                  </p>
-                  <p className="text-sm">
-                    Validity: {pkg.validityPeriodDays} days
-                  </p>
-                  <p className="text-sm">
-                    Status: {pkg.isActive ? "Active" : "Inactive"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => deletePackage(pkg.id!)}
-                  className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                >
-                  Delete Package
-                </button>
-              </div>
+                <p>SMS Quantity: {pkg.smsQuantity}</p>
+                <p>WhatsApp Quantity: {pkg.whatsappQuantity}</p>
+                <p>Voice Quantity: {pkg.voiceQuantity}</p>
+                <p>
+                  Discount: {pkg.discountValue} ({pkg.discountType})
+                </p>
+                <p>Validity: {pkg.validityPeriodDays} days</p>
+                <p>Status: {pkg.isActive ? "Active" : "Inactive"}</p>
+              </Card>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal for Adding/Editing Package */}
+      <Modal
+        open={modalVisible}
+        title={
+          selectedPackage ? "Edit Credit Package" : "Create New Credit Package"
+        }
+        onCancel={closeModal}
+        onOk={form.submit}
+        okText={selectedPackage ? "Update" : "Create"}
+      >
+        <Form
+          layout="vertical"
+          form={form}
+          onFinish={handleSavePackage}
+          // initialValues={selectedPackage || {}}
+        >
+          <Form.Item
+            label="Package Name"
+            name="name"
+            rules={[{ required: true, message: "Package name is required" }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label="SMS Quantity"
+            name="smsQuantity"
+            rules={[{ required: true, message: "SMS Quantity is required" }]}
+          >
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item
+            label="WhatsApp Quantity"
+            name="whatsappQuantity"
+            rules={[
+              { required: true, message: "WhatsApp Quantity is required" },
+            ]}
+          >
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item
+            label="Voice Quantity"
+            name="voiceQuantity"
+            rules={[{ required: true, message: "Voice Quantity is required" }]}
+          >
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item
+            label="Discount Type"
+            name="discountType"
+            rules={[{ required: true, message: "Discount Type is required" }]}
+          >
+            <Select
+              onChange={(value) => {
+                setDiscountType(value);
+              }}
+            >
+              <Option value="DIRECT">Direct Discount</Option>
+              <Option value="PERCENTAGE">Percentage Discount</Option>
+              <Option value="EXTRA_CREDITS">Extra Credits</Option>
+            </Select>
+          </Form.Item>
+
+          {discountType === "DIRECT" && (
+            <Form.Item
+              label="Direct Discount Amount"
+              name="discountValue"
+              rules={[
+                { required: true, message: "Direct Discount is required" },
+              ]}
+            >
+              <Input type="number" />
+            </Form.Item>
+          )}
+
+          {discountType === "PERCENTAGE" && (
+            <Form.Item
+              label="Percentage Discount (%)"
+              name="discountValue"
+              rules={[
+                { required: true, message: "Percentage Discount is required" },
+              ]}
+            >
+              <Input type="number" />
+            </Form.Item>
+          )}
+
+          {discountType === "EXTRA_CREDITS" && (
+            <>
+              <Form.Item label="Extra SMS Credits" name="extraCreditsSms">
+                <Input type="number" />
+              </Form.Item>
+              <Form.Item
+                label="Extra WhatsApp Credits"
+                name="extraCreditsWhatsapp"
+              >
+                <Input type="number" />
+              </Form.Item>
+              <Form.Item label="Extra Voice Credits" name="extraCreditsVoice">
+                <Input type="number" />
+              </Form.Item>
+            </>
+          )}
+
+          <Form.Item
+            label="Validity Period (Days)"
+            name="validityPeriodDays"
+            rules={[{ required: true, message: "Validity period is required" }]}
+          >
+            <Input type="number" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Modal for Updating Credits */}
+      <Modal
+        open={creditsModalVisible}
+        title="Update Available Credits & Purchase Rate"
+        onCancel={closeCreditsModal}
+        onOk={form.submit}
+        okText="Update"
+      >
+        <Form
+          layout="vertical"
+          form={form}
+          onFinish={handleUpdateCredits}
+          initialValues={credit || {}}
+        >
+          <Form.Item label="Total Available Credits" name="totalAvailable">
+            <Input type="number" />
+          </Form.Item>
+          <Form.Item label="Purchase Rate" name="purchaseRate">
+            <Input type="number" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Modal for Updating Resale Pricing */}
+      <Modal
+        open={resaleModalVisible}
+        title="Update Resale Pricing"
+        onCancel={closeResaleModal}
+        onOk={form.submit}
+        okText="Update"
+      >
+        <Form
+          layout="vertical"
+          form={form}
+          onFinish={handleUpdateResale}
+          initialValues={credit || {}}
+        >
+          <Form.Item label="Resale Rate" name="resaleRate">
+            <Input type="number" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

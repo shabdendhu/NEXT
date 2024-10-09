@@ -14,55 +14,11 @@ interface Credit {
   totalAvailable: number;
 }
 
-const sampleData = {
-  data: [
-    {
-      id: 1,
-      organizationName: "ABC Corp",
-      smsQuantity: 500,
-      whatsappQuantity: 200,
-      voiceQuantity: 300,
-      totalQuantity: 1000,
-    },
-    {
-      id: 2,
-      organizationName: "XYZ Ltd",
-      smsQuantity: 700,
-      whatsappQuantity: 300,
-      voiceQuantity: 400,
-      totalQuantity: 1400,
-    },
-    {
-      id: 3,
-      organizationName: "Sample Organization",
-      smsQuantity: 300,
-      whatsappQuantity: 150,
-      voiceQuantity: 250,
-      totalQuantity: 700,
-    },
-    {
-      id: 4,
-      organizationName: "Global Enterprises",
-      smsQuantity: 1000,
-      whatsappQuantity: 500,
-      voiceQuantity: 600,
-      totalQuantity: 2100,
-    },
-  ],
-  availableCredits: {
-    totalAvailable: 100,
-    purchaseRate: 5,
-    resaleRate: 10,
-  },
-};
-
 export default function CreditTransactions() {
   const [creditTransactions, setCreditTransactions] = useState<
     CreditTransaction[]
-  >(sampleData.data);
-  const [availableCredits, setAvailableCredits] = useState<Credit | null>(
-    sampleData.availableCredits
-  );
+  >([]);
+  const [availableCredits, setAvailableCredits] = useState<Credit | null>(null);
   const [showAlert, setShowAlert] = useState(false);
 
   useEffect(() => {
@@ -74,27 +30,55 @@ export default function CreditTransactions() {
   }, []);
 
   const fetchAvailableCredits = async () => {
-    // Replace with API call to get available credits
-    const response = await fetch("http://localhost:3000/api/credits/available");
-    const data = await response.json();
-    setAvailableCredits(sampleData.availableCredits);
+    try {
+      const response = await fetch(
+        "http://localhost:3000/api/credits/available"
+      );
+      const data = await response.json();
+      setAvailableCredits(data.availableCredits);
+    } catch (error) {
+      console.error("Error fetching available credits:", error);
+    }
   };
 
   const fetchCreditTransactions = async () => {
-    // Replace with API call to get credit transactions
-    const response = await fetch(
-      "http://localhost:3000/api/credits/transactions"
-    );
-    const data = await response.json();
-    setCreditTransactions(sampleData.data);
+    try {
+      const response = await fetch(
+        "http://localhost:3000/api/credits/transactions"
+      );
+      const data = await response.json();
+      console.log("====================================");
+      console.log(data);
+      console.log("====================================");
+      const transactions = data.data.map((transaction: any) => ({
+        id: transaction.id,
+        organizationName: transaction.organization.name,
+        smsQuantity:
+          transaction.broadcastType === "SMS" ? transaction.creditsUsed : 0,
+        whatsappQuantity:
+          transaction.broadcastType === "WHATSAPP"
+            ? transaction.creditsUsed
+            : 0,
+        voiceQuantity:
+          transaction.broadcastType === "VOICE" ? transaction.creditsUsed : 0,
+        totalQuantity: transaction.creditsUsed,
+      }));
 
-    // Check if any transaction exceeds available credits
-    const exceeds = data.data.some(
-      (transaction: CreditTransaction) =>
-        transaction.totalQuantity > (availableCredits?.totalAvailable ?? 0)
-    );
-    setShowAlert(exceeds);
+      setCreditTransactions(transactions);
+
+      // Check if any transaction exceeds available credits
+      const exceeds = transactions.some(
+        (transaction: CreditTransaction) =>
+          transaction.totalQuantity > (availableCredits?.totalAvailable ?? 0)
+      );
+      setShowAlert(exceeds);
+    } catch (error) {
+      console.error("Error fetching credit transactions:", error);
+    }
   };
+  useEffect(() => {
+    console.log(creditTransactions);
+  }, [creditTransactions]);
 
   return (
     <div className="p-8 bg-gray-100 min-h-screen">

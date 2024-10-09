@@ -15,6 +15,9 @@ const axiosManager = {
   get: async (url, config = {}) => {
     try {
       const response = await axiosInstance.get(url, config);
+      console.log("====================================");
+      console.log(response);
+      console.log("====================================");
       return response.data;
     } catch (error) {
       throw error.response.data || error;
